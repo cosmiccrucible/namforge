@@ -1,0 +1,13 @@
+# Runtime and training dependencies for the guided app.
+# PyTorch is installed separately from the CUDA index; see requirements-torch.txt.
+# Pinned to the versions used by the current verified workspace.
+
+fastapi==0.162.0
+uvicorn==0.54.0
+numpy==2.5.4
+scipy==1.18.1
+pandas==3.1.0
+soundfile==0.14.0
+matplotlib==3.11.2
+pytorch-lightning==2.6.1
+tensorboard==2.21.0

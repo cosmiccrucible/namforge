@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+# Generated or binary assets: never normalise line endings.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.nam binary
+*.obj binary
+*.f32 binary
+*.vst3 binary
+*.dll binary
+*.exe binary

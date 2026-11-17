@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>NAM Forge</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root { --bg:#16181d; --panel:#20242b; --line:#343a44; --text:#e8ecf1; --muted:#9aa4b2; --accent:#62d0a8; --bad:#ff7b72; --warn:#ffb86c; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, Segoe UI, sans-serif; }
+    header { padding:18px 24px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:baseline; }
+    h1 { font-size:18px; margin:0; letter-spacing:.02em; }
+    header small { color:var(--muted); }
+    main { display:grid; grid-template-columns: 380px 1fr; min-height: calc(100vh - 62px); }
+    aside { border-right:1px solid var(--line); padding:18px; }
+    section { padding:18px 22px; }
+    label { display:block; color:var(--muted); font-size:12px; margin:12px 0 5px; text-transform:uppercase; letter-spacing:.06em; }
+    input, select { width:100%; background:#101217; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:9px 10px; font:13px ui-monospace, Consolas, monospace; }
+    button { background:var(--accent); color:#0b1712; border:0; border-radius:6px; padding:9px 12px; font-weight:650; cursor:pointer; margin:8px 6px 0 0; }
+    button.secondary { background:#2b313b; color:var(--text); }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .row { display:flex; gap:8px; }
+    .row > * { flex:1; }
+    .step { border:1px solid var(--line); border-radius:8px; padding:14px; margin-bottom:14px; background:var(--panel); }
+    .step h2 { font-size:13px; margin:0 0 6px; color:var(--accent); text-transform:uppercase; letter-spacing:.08em; }
+    .muted { color:var(--muted); }
+    .err { color:var(--bad); white-space:pre-wrap; }
+    .warn { color:var(--warn); white-space:pre-wrap; }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    th, td { text-align:left; border-bottom:1px solid var(--line); padding:5px 6px; }
+    th { color:var(--muted); font-weight:600; }
+    code, pre { font-family: ui-monospace, Consolas, monospace; }
+    pre { background:#101217; border:1px solid var(--line); border-radius:6px; padding:10px; overflow:auto; max-height:320px; white-space:pre-wrap; }
+    .pill { display:inline-block; background:#2b313b; border-radius:999px; padding:2px 8px; margin:2px 4px 2px 0; font-size:12px; }
+    .ok { color:var(--accent); }
+    .bad { color:var(--bad); }
+    ul.warnings { margin:6px 0; padding-left:18px; color:var(--warn); }
+    .kv { margin:4px 0; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>NAM Forge</h1>
+  <small>guided capture → parametric / static NAM → C++ pack</small>
+</header>
+<main>
+  <aside>
+    <div class="step">
+      <h2>1. Inputs</h2>
+      <label>Input WAV</label>
+      <input id="inputPath" placeholder="D:\...\..._In.wav">
+      <label>Output folder</label>
+      <input id="outputDir" placeholder="D:\...\captures">
+      <label>Model type</label>
+      <select id="modelType">
+        <option value="parametric">Parametric (many outputs)</option>
+        <option value="static">Static (one capture)</option>
+      </select>
+      <button id="scanBtn">Scan captures</button>
+    </div>
+    <div class="step">
+      <h2>2. Alignment</h2>
+      <p class="muted">Estimates the global integer trim from the leading calibration pulses, then cross-checks with envelope and FIR methods. A low-confidence result is not used as the run delay.</p>
+      <button id="analyzeBtn" class="secondary">Analyze alignment</button>
+    </div>
+    <div class="step">
+      <h2>3. Prepare</h2>
+      <label>Run name</label>
+      <input id="runName" value="peavey_run">
+      <div class="row">
+        <div><label>Channels</label><input id="channels" type="number" value="8" min="4" max="16"></div>
+        <div><label>Epochs</label><input id="epochs" type="number" value="30" min="1" max="200"></div>
+      </div>
+      <button id="prepareBtn" class="secondary">Write NAM configs</button>
+    </div>
+    <div class="step">
+      <h2>4. Train</h2>
+      <p class="muted">Starts the NAM trainer in the background. The model type and delay come from the prepared manifest.</p>
+      <button id="trainBtn">Start training</button>
+      <button id="refreshBtn" class="secondary">Refresh status</button>
+    </div>
+    <div class="step">
+      <h2>5. Export</h2>
+      <label>Pack name</label>
+      <input id="packName" value="Peavey6505Parametric">
+      <label>Optional Eco .nam</label>
+      <input id="ecoNam" placeholder="path to Eco model_parametric.nam">
+      <button id="exportBtn" class="secondary">Export pack</button>
+    </div>
+  </aside>
+  <section>
+    <div id="status" class="muted">Ready.</div>
+    <div id="error" class="err"></div>
+    <div id="scanResult"></div>
+    <div id="analyzeResult"></div>
+    <div id="prepareResult"></div>
+    <div id="trainResult"></div>
+    <div id="exportResult"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let state = { scan: null, analysis: null, runDir: null, runModelType: null, job: null, logEl: null, timer: null };
+
+async function api(path, body) {
+  const r = await fetch(path, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body || {})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const detail = j.detail;
+    throw new Error(typeof detail === "string" ? detail : (detail ? JSON.stringify(detail, null, 2) : `HTTP ${r.status}`));
+  }
+  return j;
+}
+
+// Build nodes with textContent only: filenames, log text and exporter output are
+// never interpreted as HTML.
+function node(tag, props, ...children) {
+  const el = document.createElement(tag);
+  if (props) {
+    for (const [key, value] of Object.entries(props)) {
+      if (value === undefined || value === null) continue;
+      if (key === "class") el.className = value;
+      else if (key === "text") el.textContent = String(value);
+      else el.setAttribute(key, String(value));
+    }
+  }
+  for (const child of children) {
+    if (child === null || child === undefined || child === false) continue;
+    el.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  }
+  return el;
+}
+function mount(id, ...children) {
+  $(id).replaceChildren(...children.filter((c) => c !== null && c !== undefined && c !== false));
+}
+function setStatus(s) { $("status").textContent = s; }
+function setError(e) { $("error").textContent = e ? String(e) : ""; }
+function showError(e) { setError(e instanceof Error ? e.message : String(e)); }
+function req() {
+  return {input_path: $("inputPath").value.trim(), output_dir: $("outputDir").value.trim(), model_type: $("modelType").value};
+}
+// Any change to the capture set invalidates a previous alignment result, so a
+// stale trim can never be propagated into the next run.
+for (const id of ["inputPath", "outputDir"]) {
+  $(id).addEventListener("input", () => { state.analysis = null; });
+}
+$("modelType").addEventListener("change", () => { state.analysis = null; });
+function warningList(warnings) {
+  if (!warnings || !warnings.length) return null;
+  return node("ul", {class: "warnings"}, ...warnings.map((w) => node("li", {text: w})));
+}
+function kv(label, value) {
+  return node("p", {class: "kv"}, node("span", {class: "muted", text: label + ": "}), String(value));
+}
+function captureTable(j) {
+  const head = node("tr", null, node("th", {text: "File"}),
+    ...j.axes.map((a) => node("th", {text: a.name})));
+  const rows = j.captures.slice(0, 24).map((c) => node("tr", null,
+    node("td", {text: c.file}),
+    ...j.axes.map((a) => node("td", {text: String(c.values[a.name])}))));
+  return node("table", null, node("thead", null, head), node("tbody", null, ...rows));
+}
+
+$("scanBtn").onclick = async () => {
+  setError(""); setStatus("Scanning...");
+  try {
+    const j = await api("/api/scan", req());
+    state.scan = j;
+    state.analysis = null;
+    const parts = [node("h2", {text: "Captures"})];
+    parts.push(node("p", {text: `${j.output_count} outputs, ${j.sample_rate} Hz, ${j.duration.toFixed(2)} s`}));
+    if (j.axes.length) {
+      parts.push(node("p", null, node("span", {class: "muted", text: "Axes: "}),
+        ...j.axes.map((a) => node("span", {class: "pill", text: `${a.name} ${a.min}..${a.max}`}))));
+      parts.push(captureTable(j));
+    } else {
+      parts.push(node("p", {class: "muted", text: "Static capture; no model parameters."}));
+    }
+    mount("scanResult", ...parts);
+    mount("analyzeResult"); mount("prepareResult");
+    setStatus("Scan complete.");
+  } catch (e) { showError(e); setStatus("Scan failed."); }
+};
+
+$("analyzeBtn").onclick = async () => {
+  setError(""); setStatus("Aligning...");
+  try {
+    const j = await api("/api/analyze", {...req(), max_pairs: 24});
+    state.analysis = j;
+    const hasConfidence = typeof j.confident === "boolean";
+    const confident = j.confident === true;
+    const badge = node("span", {class: hasConfidence ? (confident ? "pill ok" : "pill bad") : "pill"},
+      hasConfidence ? (confident ? "high confidence" : "LOW confidence") : "confidence not reported");
+    const parts = [node("h2", {text: "Alignment"})];
+    parts.push(node("p", null, node("strong", {class: confident ? "ok" : "bad", text: `Trim: ${j.trim_samples} samples`}),
+      " ", badge, ` from ${j.pairs} pairs`));
+    if (hasConfidence && !confident) {
+      parts.push(node("p", {class: "warn", text: `This estimate is not corroborated by a second estimator. Prepare will use the default delay of ${j.fallback_delay ?? 17} samples unless you change the run by hand.`}));
+    }
+    const warnings = warningList(j.warnings);
+    if (warnings) parts.push(warnings);
+    parts.push(node("pre", {text: JSON.stringify(j.evidence, null, 2)}));
+    mount("analyzeResult", ...parts);
+    setStatus(j.confident ? "Alignment complete." : "Alignment complete (low confidence).");
+  } catch (e) { showError(e); setStatus("Alignment failed."); }
+};
+
+$("prepareBtn").onclick = async () => {
+  setError(""); setStatus("Writing configs...");
+  try {
+    const payload = {...req(), name: $("runName").value.trim() || "run",
+      channels: Number($("channels").value), max_epochs: Number($("epochs").value)};
+    if (state.analysis && state.analysis.confident) {
+      payload.delay = state.analysis.trim_samples;
+      payload.delay_confident = true;
+    }
+    const j = await api("/api/prepare", payload);
+    state.runDir = j.run_dir;
+    state.runModelType = j.model_type || payload.model_type;
+    const parts = [node("h2", {text: "Run prepared"})];
+    parts.push(node("p", null, node("code", {text: j.run_dir})));
+    parts.push(kv("Model type", j.model_type || payload.model_type));
+    parts.push(kv("Delay", j.delay === undefined
+      ? "not reported by this server"
+      : `${j.delay} samples (${j.delay_source || "unknown"})`));
+    parts.push(kv("Split", j.validation_mode
+      ? `${j.validation_mode}: ${j.train_count} train / ${j.validation_count} validation`
+      : "not reported by this server"));
+    const warnings = warningList(j.warnings);
+    if (warnings) parts.push(warnings);
+    if (j.validation_points.length) {
+      parts.push(node("p", null, node("span", {class: "muted", text: "Validation points: "}),
+        ...j.validation_points.map((p) => node("span", {class: "pill", text: p.join(",")}))));
+    }
+    mount("prepareResult", ...parts);
+    setStatus("Configs written.");
+  } catch (e) { showError(e); setStatus("Prepare failed."); }
+};
+
+function stopPolling() {
+  if (state.timer !== null) { clearInterval(state.timer); state.timer = null; }
+}
+
+$("trainBtn").onclick = async () => {
+  if (!state.runDir) { setError("Prepare a run first."); return; }
+  setError(""); setStatus("Starting trainer...");
+  stopPolling();
+  try {
+    // model_type/channels keep the request valid for a server started before
+    // this UI was updated; the current server derives both from the manifest and
+    // only uses model_type to reject a contradiction.
+    const j = await api("/api/train", {
+      run_dir: state.runDir,
+      model_type: state.runModelType || $("modelType").value,
+      channels: Number($("channels").value),
+    });
+    state.job = j.job;
+    const log = node("pre", {id: "log"});
+    state.logEl = log;
+    mount("trainResult",
+      node("h2", {text: "Training"}),
+      kv("Job", j.job),
+      kv("Model type", j.model_type),
+      kv("Delay", `${j.delay} samples`),
+      log);
+    setStatus("Training started.");
+    poll();
+    state.timer = setInterval(poll, 3000);
+  } catch (e) { showError(e); setStatus("Training failed."); }
+};
+
+$("refreshBtn").onclick = poll;
+
+$("exportBtn").onclick = async () => {
+  if (!state.runDir) { setError("Prepare/train a run first."); return; }
+  setError(""); setStatus("Exporting...");
+  try {
+    const j = await api("/api/export", {run_dir: state.runDir, name: $("packName").value.trim() || "pack", eco_nam: $("ecoNam").value.trim() || null});
+    const parts = [node("h2", {text: "Pack"})];
+    parts.push(node("p", null, node("code", {text: j.pack})));
+    if (j.checkpoint) parts.push(kv("Checkpoint", j.checkpoint));
+    if (j.checkpoint_reason) parts.push(kv("Chosen by", j.checkpoint_reason));
+    if (j.delay !== undefined) parts.push(kv("Capture delay", `${j.delay} samples`));
+    parts.push(node("pre", {text: j.output || ""}));
+    mount("exportResult", ...parts);
+    setStatus("Pack exported.");
+  } catch (e) { showError(e); setStatus("Export failed."); }
+};
+
+async function poll() {
+  if (!state.job) return;
+  try {
+    const r = await fetch(`/api/train/${state.job}`);
+    const j = await r.json();
+    if (state.logEl) state.logEl.textContent = j.log || "";
+    if (j.running) {
+      setStatus("Training...");
+    } else {
+      stopPolling();
+      setStatus(`Training finished (exit ${j.exit_code}).`);
+    }
+  } catch (e) { showError(e); stopPolling(); }
+}
+</script>
+</body>
+</html>

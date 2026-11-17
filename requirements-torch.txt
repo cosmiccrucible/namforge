@@ -1,0 +1,9 @@
+# PyTorch CUDA 12.8 wheels for the guided app's trainer.
+# Windows x64 / NVIDIA GPU only. Install with:
+#   pip install -r requirements-torch.txt
+# then install requirements.txt so the remaining packages resolve against it.
+
+--index-url https://download.pytorch.org/whl/cu128
+
+torch==2.11.0
+torchaudio==2.11.0

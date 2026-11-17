@@ -1,0 +1,51 @@
+{
+  "schema": 2,
+  "updated": "2026-11-17",
+  "note": "Workspace dependency pins. Paths are relative to this repo; ../ is the workspace root. vendor/ holds the read-only NAM upstreams and is not tracked. hise-engine/ is the separate HISE fork working tree. Use tools/bootstrap_vendor.ps1 to restore the vendor checkouts at these exact commits.",
+  "repos": {
+    "MicroNAM": {
+      "url": "https://github.com/jaffco/MicroNAM.git",
+      "commit": "83dd7de43db1e0b9b907f69c5c6aed05dc76ea90",
+      "branch": "main",
+      "path": "../vendor/MicroNAM",
+      "role": "architecture reference"
+    },
+    "neural-amp-modeler": {
+      "url": "https://github.com/sdatkinson/neural-amp-modeler.git",
+      "commit": "e680deaf4ed1d28ea260e7267680b9f10fed24b8",
+      "branch": "main",
+      "path": "../vendor/neural-amp-modeler",
+      "role": "upstream NAM trainer and .nam reference implementation"
+    },
+    "neural-amp-modeler-parametric": {
+      "url": "https://github.com/phillipmself/neural-amp-modeler-parametric.git",
+      "commit": "a3684411076be69dab53505df14922487697f2cf",
+      "branch": "main",
+      "path": "../vendor/neural-amp-modeler-parametric",
+      "role": "parametric trainer used by the pipeline (editable install)"
+    },
+    "NeuralAmpModelerCore": {
+      "url": "https://github.com/sdatkinson/NeuralAmpModelerCore.git",
+      "commit": "0b3d3c97b0859a3a8c92a8628c4dd89a25eb5842",
+      "branch": "main",
+      "path": "../vendor/NeuralAmpModelerCore",
+      "role": "runtime reference for model semantics"
+    },
+    "NeuralAmpModelerCoreParametric": {
+      "url": "https://github.com/phillipmself/NeuralAmpModelerCoreParametric.git",
+      "commit": "fddcbc91e74ba79066a43c3b73cc690073529232",
+      "branch": "main",
+      "path": "../vendor/NeuralAmpModelerCoreParametric",
+      "role": "parametric runtime reference"
+    }
+  },
+  "hise_engine": {
+    "path": "../hise-engine",
+    "origin": "https://github.com/cosmiccrucible/hise-engine.git",
+    "upstream": "https://github.com/christophhart/HISE.git",
+    "fork_of": "christophhart/HISE",
+    "base_commit": "762ae4ca6160fd99292058467a586fc27add9103",
+    "branch": "namforge/engine",
+    "role": "public HISE fork; engine patches live on namforge/engine"
+  }
+}

@@ -1,0 +1,46 @@
+# This repo holds source, docs and tooling.
+# Machine state - .venv, vendor/, build-vst/, captures and reference plugins -
+# lives at the workspace root, outside the repo.
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local build/output fallbacks if someone builds inside the repo.
+build/
+build-vst/
+dist/
+out/
+.venv/
+
+# Generated binaries / intermediate objects.
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.lib
+*.exp
+*.obj
+*.wav
+
+# Model artifacts are local outputs, never repository content.
+# Packs are published from the private models repository.
+packs/
+*.nam
+**/*Weights.h
+
+# Training outputs and logs stay local too.
+runs/
+logs/
+runs/**/*.ckpt
+runs/**/*.nam
+runs/**/*.f32
+runs/**/*.0
+runs/**/lightning_logs/
+runs/**/out*/
+
+# Editor / OS noise.
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
