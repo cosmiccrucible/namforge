@@ -1,5 +1,33 @@
 # HISE online/offline oversampling settings
 
+Status 2026-11-18: **implemented** on the fork branch as commit `67caba8`,
+pending the maintainer build. This document keeps the original analysis and
+records what the patch does.
+
+## Implemented behaviour
+
+- `MainController::getRequestedOversamplingFactor()` picks the factor from
+  HISE's non-realtime flag: online **1 or 2**, offline **1, 2 or 4**. Defaults
+  are online 1 and offline 4.
+- `Engine.setMinimumSampleRate()` keeps its old global behaviour as a fallback;
+  the new per-mode factors take precedence once a script sets one.
+- `AudioRendererBase::renderAudio()` calls `applyOversamplingForCurrentMode()`
+  after entering non-realtime mode and after leaving it, so a HISE render uses
+  the offline factor and realtime playback returns to the online factor. No
+  separate project is needed.
+- Reported PDC is now `manual latency + oversampler latency`
+  (`MainController::updateReportedLatency()`); `Engine.setLatencySamples()`
+  stores only the manual offset, and latency can return to zero.
+- Script API: `Engine.setOnlineOversamplingFactor(int)`,
+  `Engine.setOfflineOversamplingFactor(int)`, `Engine.getOversamplingFactor()`.
+- A live factor change rebuilds the graph (voices killed, PDC updated). It is
+  not a seamless switch; a DAW may need a re-prepare to adopt the new latency.
+- Not implemented yet: FIR linear phase for offline, a settings UI or
+  serialization, and applying the offline factor to a DAW offline bounce that
+  does not re-prepare.
+
+## Behaviour before the patch (2026-11-17)
+
 Question: can HISE expose separate realtime and offline oversampling settings,
 instead of one global project oversampling factor?
 
@@ -7,11 +35,10 @@ Short answer: **yes, but it requires patching HISE.** HISE currently has one
 global factor derived from the project's minimum sample rate. There is no
 built-in online/offline pair.
 
-## Current behaviour
+### Pre-patch implementation
 
 `MainController::refreshOversampling()` in
-`hise-engine/hi_core/hi_core/MainController.cpp` (line 793; run
-`tools/bootstrap_vendor.ps1` first):
+`hise-engine/hi_core/hi_core/MainController.cpp` derived one global factor:
 
 ```cpp
 auto requiredOversamplingFactor =

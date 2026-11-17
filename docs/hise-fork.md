@@ -1,20 +1,16 @@
 # HISE fork
 
-**Status (2026-11-17): published.** Local tree `hise-engine/`, branch
-`namforge/engine`, based on upstream `develop` at
-`762ae4ca6160fd99292058467a586fc27add9103`. `origin` is the public fork
+**Status (2026-11-18): first engine patch landed, pending build.** Local tree
+`hise-engine/`, branch `namforge/engine`, rebased onto upstream `develop` at
+`e150000f4270758702b3949af4d881284116c206`. `origin` is the public fork
 <https://github.com/cosmiccrucible/hise-engine>; `upstream` is
-`christophhart/HISE`. The branch is pushed and tracking `origin`. No engine
-patches yet.
-
-The fork default branch is `develop`, which GitHub created from upstream's
-current head (`e150000f`); `namforge/engine` is deliberately pinned to
-`762ae4c`, the revision used for this project's API analysis. Rebase onto
-`upstream/develop` before the first patch.
+`christophhart/HISE`. The branch carries one `namforge:` commit,
+`67caba8e`, implementing C1-C3 below. It is **not built or tested** yet; the
+maintainer builds HISE.
 
 The fork is public because GitHub forks of public repositories inherit
-visibility. It contains only upstream HISE plus (later) engine patches — no NAM
-model code or private project assets.
+visibility. It contains only upstream HISE plus engine patches: no NAM model
+code and no private project assets.
 
 The fork is a sibling of `namforge/`, outside that repo. It is not vendored, and
 there is no HISE checkout in the workspace `vendor/` any more.
@@ -37,10 +33,10 @@ belong in the model/DSP repo.
 | Item | Location |
 |---|---|
 | Training, packs, C++ core, VST, app | `namforge/` |
-| `hise/DspNetworks/ThirdParty/NamA2` nodes | `namforge/hise/` |
-| HISE demo project (XML, scripts, copied nodes) | `namforge/hise/project/` (planned) |
+| `hise/DspNetworks/ThirdParty/NamA2` nodes | `namforge-models/hise/DspNetworks/ThirdParty/NamA2` |
+| HISE demo project (XML, scripts, copied nodes) | `namforge-models/hise/project/` (planned) |
 | HISE source + engine patches | `hise-engine/` |
-| Fork pin | `namforge/vendor.lock.json` → `hise_engine` |
+| Fork pin | `namforge/vendor.lock.json` -> `hise_engine` (base + branch head) |
 
 ## Branches and remotes
 
@@ -70,19 +66,25 @@ Rebase onto `upstream/develop` at least monthly and before any release build.
 
 **Oversampling policy (owner decision 2026-11-17):** online **1x default** with a
 user-selectable **2x**; offline user-selectable **1x / 2x / 4x** (default 4x).
-IIR minimum phase realtime, FIR linear phase offline. Latch the factor at
-instantiation; no mid-session PDC change. This is the contract C2 must implement.
+IIR minimum phase realtime, FIR linear phase offline. Factors latch at prepare;
+a script change triggers a rebuild (voices killed, PDC updated), so 2x can be
+switched live but a DAW may need a re-prepare to adopt the new latency.
 
-1. **Latency reporting** — after `refreshOversampling()` / `prepareToPlay()`,
-   report the oversampler latency to the host; expose
-   `Engine.setLatencySamples()`-compatible behaviour. Verify with an impulse.
-2. **Online/offline oversampling** — two project settings, mode-aware selection
-   using HISE's non-realtime flag, safe rebuild on transition. Design:
-   [hise-online-offline-oversampling.md](hise-online-offline-oversampling.md).
-3. **Filter choice** — optional FIR linear phase for offline builds; keep IIR
-   minimum phase as the realtime default.
-4. **Build/CI** — reproducible fork build notes; no CI build of HISE is expected
-   because the maintainer builds it locally.
+1. **Latency reporting** — **implemented** in `67caba8`: `prepareToPlay()`
+   reports manual latency plus `oversampler->getLatencyInSamples()`; the
+   latency-to-zero path no longer leaves a stale bypass delay. Pending impulse
+   verification on the maintainer build.
+2. **Online/offline oversampling** — **implemented** in `67caba8`:
+   `getRequestedOversamplingFactor()` selects online 1/2 or offline 1/2/4 from
+   HISE's non-realtime flag; `AudioRendererBase` applies the offline factor on
+   entry and the online factor on exit. Script API:
+   `Engine.setOnlineOversamplingFactor()`,
+   `Engine.setOfflineOversamplingFactor()`, `Engine.getOversamplingFactor()`.
+   `Engine.setMinimumSampleRate()` keeps its legacy fallback.
+3. **Filter choice** — remaining: optional FIR linear phase for offline;
+   IIR minimum phase is the current realtime and offline default.
+4. **Build/CI** — maintainer build and impulse/offline-render verification
+   pending; no CI build of HISE is expected.
 
 Non-goals: no NAM model code, no node implementations, no editor redesign, no
 unrelated upstream cleanup.
@@ -91,8 +93,9 @@ unrelated upstream cleanup.
 
 - `namforge` never compiles against `hise-engine`; HISE builds happen in the
   fork checkout with the maintainer.
-- The demo project copies nodes from `namforge/hise/DspNetworks/ThirdParty/NamA2`;
-  it does not reference the fork source tree.
+- The demo project copies nodes from
+  `namforge-models/hise/DspNetworks/ThirdParty/NamA2`; it does not reference the
+  fork source tree.
 - If a node needs an engine API that does not exist, add the patch to the fork
   backlog first, then the node change here. Do not fork the API ad hoc.
 - Record the fork commit used for every HISE plugin build in the build notes and
