@@ -1,12 +1,13 @@
 # HISE fork
 
-**Status (2026-11-18): engine patch and build configuration landed, pending
-build.** Local tree `hise-engine/`, branch `namforge/engine`, rebased onto
-upstream `develop` at `e150000f4270758702b3949af4d881284116c206`. `origin` is
-the public fork <https://github.com/cosmiccrucible/hise-engine>; `upstream` is
-`christophhart/HISE`. The branch carries two `namforge:` commits: `67caba8e`
-(engine C1-C3) and `d5a97510` (VS2022 exporter for IPP). It is **not built or
-tested** yet; the maintainer builds HISE.
+**Status (2026-11-18): engine patch, build configuration and first build.** Local
+tree `hise-engine/`, branch `namforge/engine`, rebased onto upstream `develop` at
+`e150000f4270758702b3949af4d881284116c206`. `origin` is the public fork
+<https://github.com/cosmiccrucible/hise-engine>; `upstream` is
+`christophhart/HISE`. The branch carries four `namforge:` commits: `67caba8e`
+(engine C1-C3), `d5a9751` (VS2022 exporter), `65335ae` (LTO fix) and `a7e9685`
+(compiler codegen serialised). **HISE now builds** as `ReleaseWithFaust`; the
+engine patches are still pending runtime and impulse verification.
 
 The fork is public because GitHub forks of public repositories inherit
 visibility. It contains only upstream HISE plus engine patches: no NAM model
@@ -83,11 +84,12 @@ switched live but a DAW may need a re-prepare to adopt the new latency.
    `Engine.setMinimumSampleRate()` keeps its legacy fallback.
 3. **Filter choice** — remaining: optional FIR linear phase for offline;
    IIR minimum phase is the current realtime and offline default.
-4. **Build configuration** — **landed** in `d5a97510`: a VS2022 (v143)
-   exporter with `HISE_USE_VS2022=1`, because Intel's IPP oneAPI integration
-   only exists for v143; the VS2026 exporter stays for non-IPP builds. See
-   [Build environment](#build-environment) below. Maintainer build and
-   impulse/offline-render verification still pending.
+4. **Build configuration** — **landed and building**: VS2022 (v143) exporter
+   with `HISE_USE_VS2022=1`, because Intel's IPP oneAPI integration only exists
+   for v143; the VS2026 exporter stays for non-IPP builds. The first
+   `ReleaseWithFaust` build succeeded; runtime, PDC and offline-render
+   verification are still pending. See [Build environment](#build-environment)
+   below.
 
 ## Build environment
 
@@ -107,8 +109,13 @@ Windows, verified on 2026-11-18 except for the HISE build itself:
 - **Build config:** `ReleaseWithFaust` (Faust + IPP; IPP is exporter-level and
   applies to every configuration). LTO is **disabled** for the VS2022
   release configurations (`65335ae`): `/GL` + `/LTCG` made the MSVC linker ICE
-  on `include_hi_core.obj` with LNK1000/C1001. Use `/t:Rebuild` after changing
-  this, because objects from the LTO build cannot be reused.
+  on `include_hi_core.obj` with LNK1000/C1001. Compiler codegen is serialised
+  (`/cgthreads1`, `a7e9685`) because `/cgthreads8` produced D8040 child-process
+  failures with Bitdefender active. Use `/t:Rebuild` after changing this,
+  because objects from the LTO build cannot be reused.
+- **First build (2026-11-18):** succeeded, `HISE.exe` ~46 MB. Verified in the
+  binary: an `IPPCODE`/`IPPDATA` section (oneAPI IPP static) and an import of
+  `faust.dll`, so both are actually linked, not just defined.
 
 ```powershell
 cd projects\standalone
