@@ -1,12 +1,12 @@
 # HISE fork
 
-**Status (2026-11-18): first engine patch landed, pending build.** Local tree
-`hise-engine/`, branch `namforge/engine`, rebased onto upstream `develop` at
-`e150000f4270758702b3949af4d881284116c206`. `origin` is the public fork
-<https://github.com/cosmiccrucible/hise-engine>; `upstream` is
-`christophhart/HISE`. The branch carries one `namforge:` commit,
-`67caba8e`, implementing C1-C3 below. It is **not built or tested** yet; the
-maintainer builds HISE.
+**Status (2026-11-18): engine patch and build configuration landed, pending
+build.** Local tree `hise-engine/`, branch `namforge/engine`, rebased onto
+upstream `develop` at `e150000f4270758702b3949af4d881284116c206`. `origin` is
+the public fork <https://github.com/cosmiccrucible/hise-engine>; `upstream` is
+`christophhart/HISE`. The branch carries two `namforge:` commits: `67caba8e`
+(engine C1-C3) and `d5a97510` (VS2022 exporter for IPP). It is **not built or
+tested** yet; the maintainer builds HISE.
 
 The fork is public because GitHub forks of public repositories inherit
 visibility. It contains only upstream HISE plus engine patches: no NAM model
@@ -83,8 +83,45 @@ switched live but a DAW may need a re-prepare to adopt the new latency.
    `Engine.setMinimumSampleRate()` keeps its legacy fallback.
 3. **Filter choice** — remaining: optional FIR linear phase for offline;
    IIR minimum phase is the current realtime and offline default.
-4. **Build/CI** — maintainer build and impulse/offline-render verification
-   pending; no CI build of HISE is expected.
+4. **Build configuration** — **landed** in `d5a97510`: a VS2022 (v143)
+   exporter with `HISE_USE_VS2022=1`, because Intel's IPP oneAPI integration
+   only exists for v143; the VS2026 exporter stays for non-IPP builds. See
+   [Build environment](#build-environment) below. Maintainer build and
+   impulse/offline-render verification still pending.
+
+## Build environment
+
+Windows, verified on 2026-11-18 except for the HISE build itself:
+
+- **Toolset:** VS2022 Community / v143 (`Builds/VisualStudio2022`).
+- **IPP:** Intel oneAPI IPP 2021.12, oneAPI static linking
+  (`IPP1ALibrary="Static_Library"` in the exporter). This defines
+  `_IPP_SEQUENTIAL_STATIC`, so `hi_lac` sets `USE_IPP=1`; a minimal v143 probe
+  compiled, linked and ran against IPP.
+- **Faust:** 2.75.7 installed under `H:\Program Files\Faust`; the hardcoded
+  `C:\Program Files\Faust` paths are satisfied by a directory junction. The
+  `ReleaseWithFaust` configuration defines `HISE_INCLUDE_FAUST=1`,
+  `HISE_INCLUDE_FAUST_JIT=1` and copies `faust.dll` next to `HISE.exe`.
+- **Dependencies:** `git submodule update --init JUCE`, `tools/SDK/sdk.zip`
+  extracted (ASIO 2.3 + VST3 SDK).
+- **Build config:** `ReleaseWithFaust` (Faust + IPP; IPP is exporter-level and
+  applies to every configuration).
+
+```powershell
+cd projects\standalone
+"{Projucer path}\Projucer.exe" --resave "HISE Standalone.jucer"
+& "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" `
+  "Builds\VisualStudio2022\HISE Standalone.sln" `
+  /p:Configuration=ReleaseWithFaust /p:Platform=x64 /m /v:minimal
+```
+
+Output: `Builds\VisualStudio2022\x64\ReleaseWithFaust\App\HISE.exe`.
+
+Caveats: set **Settings -> FaustPath** to `C:\Program Files\Faust` after the
+first start; exported Faust plugins do not currently receive the Faust `lib`
+directory in their link path, so a Faust-based plugin export may need it added
+(or a small exporter patch). Faust 2.75.7 is newer than the 2.54 the setup doc
+recommends; fall back to 2.54.0 if `hi_faust_lib` fails against it.
 
 Non-goals: no NAM model code, no node implementations, no editor redesign, no
 unrelated upstream cleanup.

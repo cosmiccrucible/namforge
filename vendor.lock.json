@@ -46,7 +46,7 @@
     "fork_of": "christophhart/HISE",
     "base_commit": "e150000f4270758702b3949af4d881284116c206",
     "branch": "namforge/engine",
-    "branch_head": "67caba8e3ec1e5643eb32e42d1a3cecf427114b7",
+    "branch_head": "d5a9751036cdaa617c330972b4d346641dff46e1",
     "role": "public HISE fork; engine patches live on namforge/engine"
   }
 }
