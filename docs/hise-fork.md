@@ -105,7 +105,10 @@ Windows, verified on 2026-11-18 except for the HISE build itself:
 - **Dependencies:** `git submodule update --init JUCE`, `tools/SDK/sdk.zip`
   extracted (ASIO 2.3 + VST3 SDK).
 - **Build config:** `ReleaseWithFaust` (Faust + IPP; IPP is exporter-level and
-  applies to every configuration).
+  applies to every configuration). LTO is **disabled** for the VS2022
+  release configurations (`65335ae`): `/GL` + `/LTCG` made the MSVC linker ICE
+  on `include_hi_core.obj` with LNK1000/C1001. Use `/t:Rebuild` after changing
+  this, because objects from the LTO build cannot be reused.
 
 ```powershell
 cd projects\standalone
